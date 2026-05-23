@@ -21,6 +21,7 @@ from src.settings import Settings
 
 
 def _center_on_parent(window: tk.Toplevel, parent: tk.Misc):
+    window.withdraw()
     window.update_idletasks()
     pw = parent.winfo_width()
     ph = parent.winfo_height()
@@ -31,6 +32,7 @@ def _center_on_parent(window: tk.Toplevel, parent: tk.Misc):
     x = px + max(0, (pw - ww) // 2)
     y = py + max(0, (ph - wh) // 2)
     window.geometry(f"+{x}+{y}")
+    window.deiconify()
 
 
 class PresetDialog(tk.Toplevel):
@@ -265,27 +267,74 @@ class ManagePresetsDialog(tk.Toplevel):
         self.wait_window()
 
     def _build(self):
-        self._listbox = tk.Listbox(self, font=("Consolas", 10))
-        self._listbox.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        cols = ("name", "level", "password")
+        self._tree = ttk.Treeview(self, columns=cols, show="headings", height=12)
+        self._tree.heading("name", text="预设名")
+        self._tree.heading("level", text="级别")
+        self._tree.heading("password", text="密码")
+        self._tree.column("name", width=280, minwidth=160)
+        self._tree.column("level", width=70, minwidth=60, anchor=tk.CENTER)
+        self._tree.column("password", width=60, minwidth=50, anchor=tk.CENTER)
+        self._tree.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        self._ctx_menu = tk.Menu(self, tearoff=0)
+        self._ctx_menu.add_command(label="✎ 编辑", command=self._edit)
+        self._ctx_menu.add_command(label="★ 设为默认", command=self._set_default)
+        self._ctx_menu.add_separator()
+        self._ctx_menu.add_command(label="📥 导出预设", command=self._export)
+        self._ctx_menu.add_separator()
+        self._ctx_menu.add_command(label="✕ 删除", command=self._delete)
+
+        self._tree.bind("<Button-3>", self._show_context_menu)
+        self._tree.bind("<Double-Button-1>", lambda e: self._edit())
+        self._enable_drag_drop_import()
 
         btn_frame = ttk.Frame(self)
         btn_frame.pack(fill=tk.X, padx=5, pady=5)
 
-        ttk.Button(btn_frame, text="新增", command=self._add).pack(side=tk.LEFT, padx=2)
-        ttk.Button(btn_frame, text="编辑", command=self._edit).pack(side=tk.LEFT, padx=2)
-        ttk.Button(btn_frame, text="删除", command=self._delete).pack(side=tk.LEFT, padx=2)
-        ttk.Button(btn_frame, text="设为默认", command=self._set_default).pack(side=tk.LEFT, padx=2)
-        ttk.Button(btn_frame, text="导出", command=self._export).pack(side=tk.LEFT, padx=2)
-        ttk.Button(btn_frame, text="导入", command=self._import).pack(side=tk.LEFT, padx=2)
+        ttk.Button(btn_frame, text="＋ 新增", command=self._add).pack(side=tk.LEFT, padx=2)
+        ttk.Button(btn_frame, text="📥 导入", command=self._import).pack(side=tk.LEFT, padx=2)
         ttk.Button(btn_frame, text="关闭", command=self.destroy).pack(side=tk.RIGHT, padx=2)
         _center_on_parent(self, self.master)
 
+    def _enable_drag_drop_import(self):
+        try:
+            import tkinterdnd2
+            self._tree.drop_target_register(tkinterdnd2.DND_FILES)
+            self._tree.dnd_bind("<<Drop>>", self._on_drop_import)
+        except Exception:
+            pass
+
+    def _on_drop_import(self, event):
+        import re
+        raw = event.data
+        items = re.findall(r"\{([^}]*)\}|(\S+)", raw)
+        for match in items:
+            p = (match[0] or match[1]).strip('"').strip()
+            if p.endswith(".json"):
+                self._import_file(p)
+
+    def _show_context_menu(self, event):
+        item = self._tree.identify_row(event.y)
+        if item:
+            self._tree.selection_set(item)
+        self._ctx_menu.post(event.x_root, event.y_root)
+
+    def _selected_idx(self) -> int | None:
+        sel = self._tree.selection()
+        if not sel:
+            return None
+        return int(sel[0])
+
     def _refresh(self):
-        self._listbox.delete(0, tk.END)
+        for item in self._tree.get_children():
+            self._tree.delete(item)
         default = self._settings.default_preset_index
         for i, p in enumerate(self._settings.presets):
-            marker = " ★" if i == default else ""
-            self._listbox.insert(tk.END, f"{p.name}{marker}")
+            name = f"{p.name} ★" if i == default else p.name
+            level = p.level_name
+            pw = "🔒" if p.password else ""
+            self._tree.insert("", tk.END, iid=str(i), values=(name, level, pw))
 
     def _add(self):
         count = len(self._settings.presets)
@@ -296,10 +345,9 @@ class ManagePresetsDialog(tk.Toplevel):
             self._refresh()
 
     def _edit(self):
-        sel = self._listbox.curselection()
-        if not sel:
+        idx = self._selected_idx()
+        if idx is None:
             return
-        idx = sel[0]
         presets = self._settings.presets
         dlg = PresetDialog(self, presets[idx], title=f"编辑：{presets[idx].name}")
         if dlg.result:
@@ -307,10 +355,9 @@ class ManagePresetsDialog(tk.Toplevel):
             self._refresh()
 
     def _delete(self):
-        sel = self._listbox.curselection()
-        if not sel:
+        idx = self._selected_idx()
+        if idx is None:
             return
-        idx = sel[0]
         presets = self._settings.presets
         if messagebox.askyesno(
             "确认删除", f"确定要删除预设「{presets[idx].name}」吗？", parent=self
@@ -319,19 +366,17 @@ class ManagePresetsDialog(tk.Toplevel):
             self._refresh()
 
     def _set_default(self):
-        sel = self._listbox.curselection()
-        if not sel:
+        idx = self._selected_idx()
+        if idx is None:
             return
-        idx = sel[0]
         self._settings.default_preset_index = idx
         self._refresh()
 
     def _export(self):
-        sel = self._listbox.curselection()
-        if not sel:
+        idx = self._selected_idx()
+        if idx is None:
             messagebox.showinfo("提示", "请先选中要导出的预设。", parent=self)
             return
-        idx = sel[0]
         preset = self._settings.presets[idx]
         path = filedialog.asksaveasfilename(
             title="导出预设",
@@ -350,13 +395,15 @@ class ManagePresetsDialog(tk.Toplevel):
             parent=self,
         )
         for path in paths:
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                p = CompressPreset.from_dict(data)
-                p.name = p.name or Path(path).stem
-                self._settings.add_preset(p)
-            except Exception as e:
-                messagebox.showerror("导入失败", f"导入 {path} 时出错：\n{e}", parent=self)
-                return
-        self._refresh()
+            self._import_file(path)
+
+    def _import_file(self, path: str):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            p = CompressPreset.from_dict(data)
+            p.name = p.name or Path(path).stem
+            self._settings.add_preset(p)
+            self._refresh()
+        except Exception as e:
+            messagebox.showerror("导入失败", f"导入 {path} 时出错：\n{e}", parent=self)

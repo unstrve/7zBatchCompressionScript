@@ -8,6 +8,7 @@ from src.utils import format_bytes
 
 
 def _center_on_parent(window: tk.Toplevel, parent: tk.Misc):
+    window.withdraw()
     window.update_idletasks()
     pw = parent.winfo_width()
     ph = parent.winfo_height()
@@ -18,6 +19,7 @@ def _center_on_parent(window: tk.Toplevel, parent: tk.Misc):
     x = px + max(0, (pw - ww) // 2)
     y = py + max(0, (ph - wh) // 2)
     window.geometry(f"+{x}+{y}")
+    window.deiconify()
 
 
 class ProgressWindow(tk.Toplevel):
@@ -36,7 +38,7 @@ class ProgressWindow(tk.Toplevel):
     def _build(self):
         status_frame = ttk.Frame(self)
         status_frame.pack(fill=tk.X, padx=10, pady=(10, 2))
-        self._status_label = ttk.Label(status_frame, text="准备就绪")
+        self._status_label = ttk.Label(status_frame, text="准备就绪", style="Status.TLabel")
         self._status_label.pack(side=tk.LEFT)
         self._pct_label = ttk.Label(status_frame, text="", width=6, anchor=tk.E)
         self._pct_label.pack(side=tk.RIGHT)
@@ -44,7 +46,7 @@ class ProgressWindow(tk.Toplevel):
         self._progress = ttk.Progressbar(self, mode="determinate", value=0)
         self._progress.pack(fill=tk.X, padx=10, pady=2)
 
-        self._summary_label = ttk.Label(self, text="", foreground="gray")
+        self._summary_label = ttk.Label(self, text="", style="Summary.TLabel")
         self._summary_label.pack(fill=tk.X, padx=10, pady=(0, 2))
 
         tree_frame = ttk.LabelFrame(self, text="文件详情")
@@ -93,14 +95,14 @@ class ProgressWindow(tk.Toplevel):
         if pct == PROGRESS_INDETERMINATE:
             self._progress.configure(mode="indeterminate")
             self._progress.start(10)
-            self._status_label.config(text=status)
+            self._status_label.config(text=status, style="Status.TLabel")
             self._pct_label.config(text="...")
             return
         if pct == PROGRESS_ERROR:
             self._progress.stop()
             self._progress.configure(mode="determinate")
             self._progress["value"] = 0
-            self._status_label.config(text="出错")
+            self._status_label.config(text="出错", style="Status.Error.TLabel")
             self._pct_label.config(text="错误")
             self.set_running(False)
             return
@@ -108,13 +110,13 @@ class ProgressWindow(tk.Toplevel):
             self._progress.stop()
             self._progress.configure(mode="determinate")
             self._progress["value"] = 100
-            self._status_label.config(text="已完成！")
+            self._status_label.config(text="已完成！", style="Status.Success.TLabel")
             self._pct_label.config(text="100%")
             self.set_running(False)
             return
         self._progress.stop()
         self._progress.configure(mode="determinate")
-        self._status_label.config(text=status)
+        self._status_label.config(text=status, style="Status.TLabel")
         self._progress["value"] = pct
         self._pct_label.config(text=f"{pct}%")
 
@@ -135,7 +137,7 @@ class ProgressWindow(tk.Toplevel):
             saved = orig - comp
             parts.append(f"压缩比：{ratio:.1f}%")
             parts.append(f"节省空间：{format_bytes(saved)}")
-        self._summary_label.config(text="  |  ".join(parts), foreground="black")
+        self._summary_label.config(text="  |  ".join(parts), style="Summary.TLabel", foreground="black")
 
         files = report.get("files", [])
         if report.get("mode") == "individual" and len(files) > 0:
@@ -156,7 +158,7 @@ class ProgressWindow(tk.Toplevel):
         self._tree_frame.pack(fill=tk.X, padx=10, pady=(2, 4))
 
     def on_cancel(self):
-        self._status_label.config(text="已取消")
+        self._status_label.config(text="已取消", style="Status.Warning.TLabel")
         self._pct_label.config(text="")
         self._progress.stop()
         self._progress.configure(mode="determinate")

@@ -7,6 +7,7 @@ from typing import Optional
 from src.models import CompressPreset
 from src.task import CompressionTask
 from src.settings import Settings
+from src.ui.theme import apply_theme
 from src.ui.widgets import FileListFrame
 from src.ui.dialogs import ManagePresetsDialog
 from src.ui.progress_window import ProgressWindow
@@ -26,69 +27,84 @@ class MainWindow:
 
     def _build_ui(self):
         notebook = ttk.Notebook(self.root)
-        notebook.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+        notebook.pack(fill=tk.BOTH, expand=True, padx=4, pady=(4, 0))
         self._build_file_tab(notebook)
         self._build_tool_tab(notebook)
         self._build_help_tab(notebook)
 
+        self._statusbar = ttk.Label(self.root, text="就绪", relief=tk.SUNKEN, anchor=tk.W, padding=(6, 2))
+        self._statusbar.pack(fill=tk.X, padx=4, pady=(2, 4))
+
     def _build_file_tab(self, notebook):
-        tab = ttk.Frame(notebook, padding=(6, 4))
+        tab = ttk.Frame(notebook)
         notebook.add(tab, text="文件")
 
-        self.file_list = FileListFrame(tab)
-        self.file_list.pack(fill=tk.BOTH, expand=True)
-
         opt_frame = ttk.LabelFrame(tab, text="压缩选项")
-        opt_frame.pack(fill=tk.X, pady=(6, 0))
+        opt_frame.pack(fill=tk.X)
 
         row = ttk.Frame(opt_frame)
-        row.pack(fill=tk.X, padx=5, pady=5)
+        row.pack(fill=tk.X, padx=8, pady=6)
         ttk.Label(row, text="预设：").pack(side=tk.LEFT)
         self._preset_combo = ttk.Combobox(row, state="readonly", width=25)
-        self._preset_combo.pack(side=tk.LEFT, padx=5)
+        self._preset_combo.pack(side=tk.LEFT, padx=6)
+        self._preset_combo.bind("<<ComboboxSelected>>", lambda e: self._update_statusbar())
 
-        ttk.Separator(row, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=8)
+        ttk.Separator(row, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=10)
 
         self._mode = tk.StringVar(value="individual")
+        self._mode.trace_add("write", lambda *_: self._update_statusbar())
         ttk.Label(row, text="模式：").pack(side=tk.LEFT)
-        ttk.Radiobutton(row, text="独立", variable=self._mode, value="individual").pack(side=tk.LEFT, padx=2)
-        ttk.Radiobutton(row, text="合并", variable=self._mode, value="merge").pack(side=tk.LEFT, padx=2)
+        ttk.Radiobutton(row, text="独立", variable=self._mode, value="individual").pack(side=tk.LEFT, padx=3)
+        ttk.Radiobutton(row, text="合并", variable=self._mode, value="merge").pack(side=tk.LEFT, padx=3)
 
         action_frame = ttk.Frame(tab)
         action_frame.pack(fill=tk.X, pady=(6, 0))
-        self._start_btn = ttk.Button(action_frame, text="开始压缩", command=self._start)
-        self._start_btn.pack(side=tk.LEFT, padx=2)
+        self._start_btn = ttk.Button(action_frame, text="开始压缩", style="Accent.TButton", command=self._start)
+        self._start_btn.pack(side=tk.LEFT, padx=3)
         self._cancel_btn = ttk.Button(action_frame, text="取消", command=self._cancel, state=tk.DISABLED)
-        self._cancel_btn.pack(side=tk.LEFT, padx=2)
+        self._cancel_btn.pack(side=tk.LEFT, padx=3)
+
+        self.file_list = FileListFrame(tab)
+        self.file_list.pack(fill=tk.BOTH, expand=True, pady=(6, 0))
 
     def _build_tool_tab(self, notebook):
-        tab = ttk.Frame(notebook, padding=(12, 10))
+        tab = ttk.Frame(notebook)
         notebook.add(tab, text="工具")
 
-        ttk.Label(tab, text="7-Zip 路径", font=("", 10, "bold")).pack(anchor=tk.W)
+        ttk.Label(tab, text="7-Zip 路径", style="Title.TLabel").pack(anchor=tk.W, pady=(12, 0))
         path_frame = ttk.Frame(tab)
-        path_frame.pack(fill=tk.X, pady=(4, 12))
+        path_frame.pack(fill=tk.X, pady=(6, 4))
         self._path_var = tk.StringVar(value=self.settings.sevenz_path)
         ttk.Entry(path_frame, textvariable=self._path_var, width=50).pack(side=tk.LEFT)
         ttk.Button(path_frame, text="浏览", command=self._browse_7z).pack(side=tk.LEFT, padx=4)
         ttk.Button(path_frame, text="保存", command=self._save_7z_path).pack(side=tk.LEFT)
         ttk.Label(tab, text="留空则自动搜索 PATH 和常见安装目录。", foreground="gray").pack(anchor=tk.W)
 
-        ttk.Separator(tab, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=12)
-        ttk.Label(tab, text="预设管理", font=("", 10, "bold")).pack(anchor=tk.W)
-        ttk.Button(tab, text="打开预设管理器...", command=self._manage_presets).pack(anchor=tk.W, pady=(4, 0))
+        ttk.Separator(tab, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=16)
+        ttk.Label(tab, text="预设管理", style="Title.TLabel").pack(anchor=tk.W)
+        ttk.Button(tab, text="打开预设管理器...", command=self._manage_presets).pack(anchor=tk.W, pady=(6, 0))
+
+        ttk.Separator(tab, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=16)
+        ttk.Label(tab, text="主题", style="Title.TLabel").pack(anchor=tk.W)
+        theme_row = ttk.Frame(tab)
+        theme_row.pack(fill=tk.X, pady=(6, 0))
+        ttk.Label(theme_row, text="界面风格：").pack(side=tk.LEFT)
+        self._theme_combo = ttk.Combobox(theme_row, state="readonly", width=16,
+                                         values=["现代风格", "默认风格"])
+        self._theme_combo.pack(side=tk.LEFT, padx=4)
+        self._theme_combo.bind("<<ComboboxSelected>>", self._on_theme_change)
 
     def _build_help_tab(self, notebook):
-        tab = ttk.Frame(notebook, padding=(12, 10))
+        tab = ttk.Frame(notebook)
         notebook.add(tab, text="帮助")
 
-        ttk.Label(tab, text="7z 批量压缩工具", font=("", 12, "bold")).pack(anchor=tk.W)
-        ttk.Label(tab, text="v1.0").pack(anchor=tk.W, pady=(0, 8))
+        ttk.Label(tab, text="7z 批量压缩工具", font=("", 13, "bold")).pack(anchor=tk.W, pady=(12, 0))
+        ttk.Label(tab, text="v1.0", foreground="gray").pack(anchor=tk.W, pady=(2, 12))
         ttk.Label(tab, text="基于 7-Zip 的轻量级批量文件压缩桌面工具。").pack(anchor=tk.W)
         ttk.Label(tab, text="使用 Python + tkinter 构建。").pack(anchor=tk.W)
-        ttk.Separator(tab, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=12)
-        ttk.Label(tab, text="快捷键", font=("", 10, "bold")).pack(anchor=tk.W)
-        ttk.Label(tab, text="  Delete  移除选中文件").pack(anchor=tk.W, pady=(2, 0))
+        ttk.Separator(tab, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=16)
+        ttk.Label(tab, text="快捷键", style="Title.TLabel").pack(anchor=tk.W)
+        ttk.Label(tab, text="  Delete  移除选中文件").pack(anchor=tk.W, pady=(4, 0))
         ttk.Label(tab, text="  右键    显示文件操作菜单").pack(anchor=tk.W)
 
     def _refresh_presets(self):
@@ -98,6 +114,14 @@ class MainWindow:
         if names:
             idx = min(self.settings.default_preset_index, len(names) - 1)
             self._preset_combo.current(idx)
+        theme_idx = 0 if self.settings.current_theme == "modern" else 1
+        self._theme_combo.current(theme_idx)
+        self._update_statusbar()
+
+    def _on_theme_change(self, event=None):
+        name = ["modern", "default"][self._theme_combo.current()]
+        self.settings.current_theme = name
+        apply_theme(self.root, name)
 
     def _get_selected_preset(self) -> Optional[CompressPreset]:
         idx = self._preset_combo.current()
@@ -169,6 +193,16 @@ class MainWindow:
     def _on_task_done(self):
         self._task = None
         self._set_busy(False)
+        self._update_statusbar("已完成")
+
+    def _update_statusbar(self, msg: str = ""):
+        files = self.file_list.get_files()
+        count = len(files)
+        mode = "独立" if self._mode.get() == "individual" else "合并"
+        preset = self._get_selected_preset()
+        preset_name = preset.name if preset else "无"
+        status = msg or "就绪"
+        self._statusbar.config(text=f"{status}  |  共 {count} 项  |  {mode}  |  {preset_name}")
 
     def _cancel(self):
         if self._task:
@@ -183,6 +217,7 @@ class MainWindow:
         self._start_btn.config(state=state)
         self._cancel_btn.config(state=tk.NORMAL if busy else tk.DISABLED)
         self.file_list.set_enabled(not busy)
+        self._update_statusbar("正在压缩..." if busy else "就绪")
 
     def _on_closing(self):
         if self._task:
@@ -194,6 +229,7 @@ class MainWindow:
 def run_app():
     root = tk.Tk()
     settings = Settings()
+    apply_theme(root, settings.current_theme)
     dnd_available = False
     try:
         from src.dnd import enable_dnd_for_app

@@ -20,6 +20,7 @@ class Settings:
         self._sevenz_path: str = ""
         self._default_preset_index: int = 0
         self._window_geometry: str = "800x620"
+        self._current_theme: str = "modern"
         self._presets: List[CompressPreset] = []
         self._load()
 
@@ -31,6 +32,7 @@ class Settings:
                 self._sevenz_path = cfg.get("sevenz_path", "")
                 self._default_preset_index = cfg.get("default_preset_index", 0)
                 self._window_geometry = cfg.get("window_geometry", "800x620")
+                self._current_theme = cfg.get("current_theme", "modern")
             except Exception:
                 pass
 
@@ -49,6 +51,7 @@ class Settings:
             "sevenz_path": self._sevenz_path,
             "default_preset_index": self._default_preset_index,
             "window_geometry": self._window_geometry,
+            "current_theme": self._current_theme,
         }
         with open(self._config_file, "w", encoding="utf-8") as f:
             json.dump(cfg, f, indent=2)
@@ -87,6 +90,16 @@ class Settings:
     def window_geometry(self, value: str):
         self._window_geometry = value
         self._save()
+
+    @property
+    def current_theme(self) -> str:
+        return self._current_theme
+
+    @current_theme.setter
+    def current_theme(self, value: str):
+        if value in ("modern", "default"):
+            self._current_theme = value
+            self._save()
 
     @property
     def presets(self) -> List[CompressPreset]:
