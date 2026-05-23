@@ -8,7 +8,7 @@ from typing import List
 from src.models import CompressPreset
 
 
-class Settings:
+class SettingsService:
     def __init__(self, config_dir: str | None = None):
         if config_dir is None:
             appdata = os.environ.get("APPDATA", "")

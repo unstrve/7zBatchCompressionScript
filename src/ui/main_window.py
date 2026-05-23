@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import threading
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from typing import Optional
 
 from src.models import CompressPreset
-from src.task import CompressionTask
-from src.settings import Settings
+from src.core.settings_service import SettingsService
+from src.core.archive_service import ArchiveService
+from src.core.compression_service import CompressionService
+from src.core.progress_events import ProgressEventBus
 from src.ui.theme import apply_theme
 from src.ui.widgets import FileListFrame
 from src.ui.dialogs import ManagePresetsDialog
@@ -14,13 +17,13 @@ from src.ui.progress_window import ProgressWindow
 
 
 class MainWindow:
-    def __init__(self, root: tk.Tk):
+    def __init__(self, root: tk.Tk, settings: SettingsService,
+                 archiver: ArchiveService, compression: CompressionService):
         self.root = root
-        self.root.title("7z 批量压缩工具")
-        self.root.minsize(560, 500)
-        self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
-        self.settings = Settings()
-        self._task: Optional[CompressionTask] = None
+        self.settings = settings
+        self._archiver = archiver
+        self._compression = compression
+        self._task: Optional[threading.Thread] = None
         self._pw: Optional[ProgressWindow] = None
         self._build_ui()
         self._refresh_presets()
@@ -176,19 +179,22 @@ class MainWindow:
         pw = ProgressWindow(self.root)
         pw.set_running(True)
 
-        def on_progress(status, pct):
-            pw.after(0, pw.on_progress, status, pct)
-
-        def on_log(message):
-            pw.after(0, pw.on_log, message)
-
-        def on_done(report):
-            pw.after(0, pw.on_done, report)
-            self.root.after(0, self._on_task_done)
+        bus = ProgressEventBus()
+        bus.on_progress(lambda s, p: pw.after(0, pw.on_progress, s, p))
+        bus.on_log(lambda m: pw.after(0, pw.on_log, m))
+        bus.on_done(lambda r: pw.after(0, pw.on_done, r))
 
         self._pw = pw
-        self._task = CompressionTask(files, preset, mode, custom_7z_path=self.settings.sevenz_path)
-        self._task.start(progress_cb=on_progress, log_cb=on_log, done_cb=on_done)
+        self._bus = bus
+        sources = list(files)
+        custom_path = self.settings.sevenz_path
+
+        def _run():
+            self._compression.run(sources, preset, mode, custom_path, bus)
+            self.root.after(0, self._on_task_done)
+
+        self._task = threading.Thread(target=_run, daemon=True)
+        self._task.start()
 
     def _on_task_done(self):
         self._task = None
@@ -206,7 +212,7 @@ class MainWindow:
 
     def _cancel(self):
         if self._task:
-            self._task.cancel()
+            self._compression.cancel()
             self._task = None
             self._set_busy(False)
             if self._pw and self._pw.winfo_exists():
@@ -221,30 +227,9 @@ class MainWindow:
 
     def _on_closing(self):
         if self._task:
-            self._task.cancel()
+            self._compression.cancel()
         self.settings.window_geometry = self.root.geometry()
         self.root.destroy()
 
 
-def run_app():
-    root = tk.Tk()
-    settings = Settings()
-    apply_theme(root, settings.current_theme)
-    dnd_available = False
-    try:
-        from src.dnd import enable_dnd_for_app
-        enable_dnd_for_app(root)
-        dnd_available = True
-    except Exception as e:
-        print(f"[DnD] tkinterdnd2 not available, using file dialogs: {e}")
 
-    root.title("7z 批量压缩工具")
-    root.geometry(settings.window_geometry)
-
-    app = MainWindow(root)
-    if dnd_available:
-        app.file_list.enable_drag_drop()
-    else:
-        app.file_list.set_drag_drop_hint(False)
-
-    root.mainloop()

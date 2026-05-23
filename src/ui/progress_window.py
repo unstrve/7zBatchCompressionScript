@@ -3,8 +3,8 @@ from __future__ import annotations
 import tkinter as tk
 from tkinter import ttk, filedialog
 
-from src.task import PROGRESS_ERROR, PROGRESS_INDETERMINATE
-from src.utils import format_bytes
+from src.core.progress_events import PROGRESS_ERROR, PROGRESS_INDETERMINATE
+from src.utils.formats import format_bytes, format_duration
 
 
 def _center_on_parent(window: tk.Toplevel, parent: tk.Misc):
@@ -129,7 +129,7 @@ class ProgressWindow(tk.Toplevel):
     def on_done(self, report: dict):
         parts = []
         total = report.get("total_seconds", 0)
-        parts.append(f"总用时：{_fmt_time(total)}")
+        parts.append(f"总用时：{format_duration(total)}")
         orig = report.get("original_size", 0)
         comp = report.get("compressed_size", 0)
         if orig > 0:
@@ -150,7 +150,7 @@ class ProgressWindow(tk.Toplevel):
             orig = f.get("original_size", 0)
             arch = f.get("archive_size", 0)
             t = f.get("seconds", 0)
-            time_str = _fmt_time(t)
+            time_str = format_duration(t)
             orig_str = format_bytes(orig) if orig > 0 else "-"
             arch_str = format_bytes(arch) if arch > 0 else "-"
             ratio_str = f"{arch / orig * 100:.1f}%" if orig > 0 and arch > 0 else "-"
@@ -182,8 +182,3 @@ class ProgressWindow(tk.Toplevel):
             return
         self.destroy()
 
-
-def _fmt_time(seconds: float) -> str:
-    if seconds < 60:
-        return f"{seconds:.1f} 秒"
-    return f"{int(seconds // 60)} 分 {seconds % 60:.0f} 秒"

@@ -17,7 +17,7 @@ from src.models import (
     ENCRYPTION_OPTIONS,
     OUTPUT_MODES,
 )
-from src.settings import Settings
+from src.core.settings_service import SettingsService
 
 
 def _center_on_parent(window: tk.Toplevel, parent: tk.Misc):
@@ -254,7 +254,7 @@ class SettingsDialog(tk.Toplevel):
 
 
 class ManagePresetsDialog(tk.Toplevel):
-    def __init__(self, parent, settings: Settings):
+    def __init__(self, parent, settings: SettingsService):
         super().__init__(parent)
         self.title("管理预设")
         self.transient(parent)

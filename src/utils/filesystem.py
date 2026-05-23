@@ -2,39 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import os
-import re
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import List
-
-
-def format_size(path: str) -> str:
-    try:
-        p = Path(path)
-        if p.is_dir():
-            count = sum(1 for _ in p.rglob("*"))
-            return f"({count} \u9879)"
-        size = p.stat().st_size
-        return format_bytes(size)
-    except OSError:
-        return ""
-
-
-def format_bytes(size: int) -> str:
-    for unit in ("B", "KB", "MB", "GB"):
-        if size < 1024:
-            return f"{size:.1f} {unit}" if unit != "B" else f"{size} B"
-        size /= 1024
-    return f"{size:.1f} TB"
-
-
-def format_duration(seconds: float) -> str:
-    if seconds < 60:
-        return f"{seconds:.1f} \u79d2"
-    minutes = int(seconds // 60)
-    secs = seconds % 60
-    return f"{minutes} \u5206 {secs:.0f} \u79d2"
+from typing import Callable, List
 
 
 def resolve_conflict_path(path: str) -> str:
@@ -59,7 +30,7 @@ def make_output_path(source: str, default_name: str, preset, mode: str) -> str:
     return str(Path(out_dir) / f"{name}.7z")
 
 
-def delete_path(path: str, log_cb):
+def delete_path(path: str, log_cb: Callable):
     try:
         p = Path(path)
         if p.is_dir():
@@ -93,10 +64,3 @@ def sha256sum(path: str) -> str:
                 break
             h.update(chunk)
     return h.hexdigest()
-
-
-def parse_7z_progress(line: str) -> int | None:
-    m = re.search(r"(\d+)%\s*$", line)
-    if m:
-        return int(m.group(1))
-    return None
