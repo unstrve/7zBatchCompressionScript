@@ -1,0 +1,12 @@
+[project]
+name = "7z-batch-compression-script"
+version = "1.0.0"
+description = "Lightweight desktop tool for batch file compression using 7-Zip"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+dragdrop = ["tkinterdnd2>=0.3.0"]
+
+[project.urls]
+Source = "https://github.com/yourusername/7zBatchCompressionScript"

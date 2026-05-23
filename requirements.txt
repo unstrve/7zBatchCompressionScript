@@ -1,0 +1,2 @@
+# Optional: enables drag-and-drop support
+# pip install tkinterdnd2

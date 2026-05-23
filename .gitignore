@@ -1,0 +1,38 @@
+# 虚拟环境
+.venv/
+venv/
+env/
+ENV/
+
+# Python 字节码和缓存
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# 分发 / 构建
+dist/
+build/
+*.egg
+
+# 系统环境变量（含密钥、数据库密码等）
+.env
+.venv.local
+
+# IDE 和编辑器配置
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 操作系统生成文件
+.DS_Store
+Thumbs.db
+
+# 数据库文件
+*.db
+*.sqlite3
+
+# 上传和日志
+media/
+static/uploads/
+*.log
