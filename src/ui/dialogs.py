@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import tkinter as tk
 from pathlib import Path
 from tkinter import ttk, filedialog, messagebox
@@ -18,21 +19,14 @@ from src.models import (
     OUTPUT_MODES,
 )
 from src.core.settings_service import SettingsService
+from src.ui import center_on_parent
 
 
-def _center_on_parent(window: tk.Toplevel, parent: tk.Misc):
-    window.withdraw()
-    window.update_idletasks()
-    pw = parent.winfo_width()
-    ph = parent.winfo_height()
-    px = parent.winfo_x()
-    py = parent.winfo_y()
-    ww = window.winfo_width()
-    wh = window.winfo_height()
-    x = px + max(0, (pw - ww) // 2)
-    y = py + max(0, (ph - wh) // 2)
-    window.geometry(f"+{x}+{y}")
-    window.deiconify()
+_VOLUME_RE = re.compile(r"^\d+[kmgb]$", re.IGNORECASE)
+
+
+def _is_valid_volume_size(val: str) -> bool:
+    return bool(_VOLUME_RE.match(val))
 
 
 class PresetDialog(tk.Toplevel):
@@ -148,7 +142,7 @@ class PresetDialog(tk.Toplevel):
         ttk.Button(btn_frame, text="取消", command=self.destroy).pack(side=tk.LEFT, padx=5)
 
         self.columnconfigure(1, weight=1)
-        _center_on_parent(self, self.master)
+        center_on_parent(self, self.master)
 
     def _toggle_pw(self):
         self._password.config(show="" if self._show_pw.get() else "*")
@@ -183,6 +177,17 @@ class PresetDialog(tk.Toplevel):
         self._extra.insert(0, p.additional_args)
 
     def _save(self):
+        extra = self._extra.get().strip()
+        for token in extra.split():
+            if token.startswith("-p"):
+                messagebox.showerror("参数错误", "密码参数 (-p) 由系统自动处理，不能写在额外参数中。", parent=self)
+                return
+
+        split_val = self._split.get().strip()
+        if split_val and not _is_valid_volume_size(split_val):
+            messagebox.showerror("参数错误", "分卷大小格式无效，请使用例如：100m, 1g, 1b", parent=self)
+            return
+
         self.result = CompressPreset(
             name=self._name.get().strip() or "未命名",
             level_name=self._level.get(),
@@ -203,7 +208,7 @@ class PresetDialog(tk.Toplevel):
             delete_after=self._delete_after.get(),
             verify_archive=self._verify.get(),
             recursive=self._recursive.get(),
-            additional_args=self._extra.get().strip(),
+            additional_args=extra,
         )
         self.destroy()
 
@@ -250,7 +255,7 @@ class SettingsDialog(tk.Toplevel):
         btn_frame.grid(row=2, column=0, columnspan=3, pady=10)
         ttk.Button(btn_frame, text="保存", command=save).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="取消", command=self.destroy).pack(side=tk.LEFT, padx=5)
-        _center_on_parent(self, self.master)
+        center_on_parent(self, self.master)
 
 
 class ManagePresetsDialog(tk.Toplevel):
@@ -295,7 +300,7 @@ class ManagePresetsDialog(tk.Toplevel):
         ttk.Button(btn_frame, text="＋ 新增", command=self._add).pack(side=tk.LEFT, padx=2)
         ttk.Button(btn_frame, text="📥 导入", command=self._import).pack(side=tk.LEFT, padx=2)
         ttk.Button(btn_frame, text="关闭", command=self.destroy).pack(side=tk.RIGHT, padx=2)
-        _center_on_parent(self, self.master)
+        center_on_parent(self, self.master)
 
     def _enable_drag_drop_import(self):
         try:
@@ -306,7 +311,6 @@ class ManagePresetsDialog(tk.Toplevel):
             pass
 
     def _on_drop_import(self, event):
-        import re
         raw = event.data
         items = re.findall(r"\{([^}]*)\}|(\S+)", raw)
         for match in items:

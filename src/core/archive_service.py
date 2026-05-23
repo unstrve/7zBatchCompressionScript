@@ -74,7 +74,7 @@ class ArchiveService:
             cmd.append(f"-mmt={preset.num_threads}")
 
         if preset.password:
-            cmd.append("-p" + preset.password)
+            cmd.append("-p")
             if preset.encrypt_filenames:
                 cmd.append("-mhe=on")
             if preset.encryption_method != "AES-256":
@@ -90,7 +90,10 @@ class ArchiveService:
             cmd.append("-r")
 
         if preset.additional_args:
-            cmd.extend(preset.additional_args.split())
+            for token in preset.additional_args.split():
+                if token.startswith("-p"):
+                    continue
+                cmd.append(token)
 
         cmd.append("-y")
         cmd.append(self._norm_path(archive_path))
@@ -101,6 +104,7 @@ class ArchiveService:
     def run_7z(
         self,
         cmd: List[str],
+        password: str = "",
         line_callback: Callable[[str], None] | None = None,
         proc_holder: list | None = None,
         cwd: str | None = None,
@@ -111,6 +115,7 @@ class ArchiveService:
         proc = subprocess.Popen(
             cmdline,
             cwd=cwd,
+            stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -120,6 +125,9 @@ class ArchiveService:
         )
         if proc_holder is not None:
             proc_holder.append(proc)
+        if password:
+            proc.stdin.write(password + "\n")
+            proc.stdin.flush()
         for line in proc.stdout:
             line = line.rstrip("\n\r")
             if line_callback:

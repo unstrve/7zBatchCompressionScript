@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 import os
+import traceback
 from pathlib import Path
 from typing import List
 
 from src.models import CompressPreset
+from src.crypto import encrypt_password, decrypt_password
 
 
 class SettingsService:
@@ -22,6 +24,7 @@ class SettingsService:
         self._window_geometry: str = "800x620"
         self._current_theme: str = "modern"
         self._presets: List[CompressPreset] = []
+        self._load_error: str = ""
         self._load()
 
     def _load(self):
@@ -33,15 +36,21 @@ class SettingsService:
                 self._default_preset_index = cfg.get("default_preset_index", 0)
                 self._window_geometry = cfg.get("window_geometry", "800x620")
                 self._current_theme = cfg.get("current_theme", "modern")
-            except Exception:
-                pass
+            except Exception as e:
+                traceback.print_exc()
+                self._load_error += f"读取配置失败：{e}\n"
 
         if self._presets_file.exists():
             try:
                 with open(self._presets_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
+                for d in data:
+                    if d.get("password"):
+                        d["password"] = decrypt_password(d["password"])
                 self._presets = [CompressPreset.from_dict(p) for p in data]
-            except Exception:
+            except Exception as e:
+                traceback.print_exc()
+                self._load_error += f"读取预设失败：{e}\n"
                 self._presets = [CompressPreset.default()]
         else:
             self._presets = [CompressPreset.default()]
@@ -56,12 +65,13 @@ class SettingsService:
         with open(self._config_file, "w", encoding="utf-8") as f:
             json.dump(cfg, f, indent=2)
         with open(self._presets_file, "w", encoding="utf-8") as f:
-            json.dump(
-                [p.to_dict() for p in self._presets],
-                f,
-                indent=2,
-                ensure_ascii=False,
-            )
+            dicts = []
+            for p in self._presets:
+                d = p.to_dict()
+                if d["password"]:
+                    d["password"] = encrypt_password(d["password"])
+                dicts.append(d)
+            json.dump(dicts, f, indent=2, ensure_ascii=False)
 
     @property
     def sevenz_path(self) -> str:

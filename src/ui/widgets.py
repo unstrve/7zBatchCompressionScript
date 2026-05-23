@@ -20,11 +20,27 @@ class FileListFrame(ttk.LabelFrame):
         self._files: list[str] = []
         self._sort_col: str = ""
         self._sort_rev: bool = False
+        self._size_cache: dict[str, tuple[int, int]] = {}
         self._build_ui()
 
     def _build_ui(self):
         toolbar = ttk.Frame(self)
         toolbar.pack(fill=tk.X, padx=5, pady=(5, 0))
+
+        self._ctx_menu_sel = tk.Menu(self, tearoff=0)
+        self._ctx_menu_sel.add_command(label="移除选中", command=self._remove_selected)
+        self._ctx_menu_sel.add_command(label="打开所在文件夹", command=self._open_folder)
+        self._ctx_menu_sel.add_separator()
+        self._ctx_menu_sel.add_command(label="全选", command=self._select_all)
+        self._ctx_menu_sel.add_command(label="反选", command=self._invert_selection)
+        self._ctx_menu_sel.add_separator()
+        self._ctx_menu_sel.add_command(label="清空全部", command=self._clear)
+
+        self._ctx_menu_empty = tk.Menu(self, tearoff=0)
+        self._ctx_menu_empty.add_command(label="全选", command=self._select_all)
+        self._ctx_menu_empty.add_command(label="反选", command=self._invert_selection)
+        self._ctx_menu_empty.add_separator()
+        self._ctx_menu_empty.add_command(label="清空全部", command=self._clear)
 
         ttk.Button(toolbar, text=f"{ICON_ADD_FILE} 添加文件", style="Toolbar.TButton",
                    command=self._add_files).pack(side=tk.LEFT, padx=1)
@@ -68,6 +84,19 @@ class FileListFrame(ttk.LabelFrame):
             col_map = {"#1": "name", "#2": "type", "#3": "size"}
             self._sort_by(col_map.get(col, "name"))
 
+    def _get_size(self, path: str) -> int:
+        p = Path(path)
+        try:
+            if p.is_file():
+                return p.stat().st_size
+            if p.is_dir():
+                total = sum(f.stat().st_size for f in p.rglob("*") if f.is_file())
+                self._size_cache[path] = (total, sum(1 for _ in p.rglob("*")))
+                return total
+        except OSError:
+            pass
+        return 0
+
     def _sort_by(self, col: str):
         if self._sort_col == col:
             self._sort_rev = not self._sort_rev
@@ -82,10 +111,7 @@ class FileListFrame(ttk.LabelFrame):
             if col == "type":
                 return 0 if p.is_file() else 1
             if col == "size":
-                try:
-                    return -p.stat().st_size if p.is_file() else -sum(f.stat().st_size for f in p.rglob("*") if f.is_file()) if any(p.rglob("*")) else 0
-                except OSError:
-                    return 0
+                return -self._get_size(f)
             return 0
 
         self._files.sort(key=key, reverse=self._sort_rev)
@@ -113,6 +139,7 @@ class FileListFrame(ttk.LabelFrame):
         p = os.path.normpath(p)
         if p not in self._files:
             self._files.append(p)
+            self._size_cache.pop(p, None)
 
     def _on_drop(self, event):
         raw = event.data
@@ -156,22 +183,9 @@ class FileListFrame(ttk.LabelFrame):
                     self._tree.selection_set(item)
                     sel = (item,)
         if sel:
-            m = tk.Menu(self, tearoff=0)
-            m.add_command(label="移除选中", command=self._remove_selected)
-            m.add_command(label="打开所在文件夹", command=self._open_folder)
-            m.add_separator()
-            m.add_command(label="全选", command=self._select_all)
-            m.add_command(label="反选", command=self._invert_selection)
-            m.add_separator()
-            m.add_command(label="清空全部", command=self._clear)
-            m.post(event.x_root, event.y_root)
+            self._ctx_menu_sel.post(event.x_root, event.y_root)
         else:
-            m = tk.Menu(self, tearoff=0)
-            m.add_command(label="全选", command=self._select_all)
-            m.add_command(label="反选", command=self._invert_selection)
-            m.add_separator()
-            m.add_command(label="清空全部", command=self._clear)
-            m.post(event.x_root, event.y_root)
+            self._ctx_menu_empty.post(event.x_root, event.y_root)
 
     def _open_folder(self):
         sel = self._tree.selection()
@@ -199,12 +213,16 @@ class FileListFrame(ttk.LabelFrame):
         for i, f in enumerate(self._files):
             p = Path(f)
             is_dir = p.is_dir()
-            name = p.name if is_dir else p.name
+            name = p.name
             type_str = "文件夹" if is_dir else "文件"
             try:
                 if is_dir:
-                    count = sum(1 for _ in p.rglob("*"))
-                    size_str = f"({count} 项)"
+                    cached = self._size_cache.get(f)
+                    if cached is not None:
+                        size_str = f"({cached[1]} 项)"
+                    else:
+                        count = sum(1 for _ in p.rglob("*"))
+                        size_str = f"({count} 项)"
                 else:
                     size = p.stat().st_size
                     size_str = format_bytes(size)

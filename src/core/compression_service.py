@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import threading
 import time
 from pathlib import Path
 from typing import Any, List, Optional
@@ -20,19 +21,28 @@ from src.utils.formats import format_duration, format_bytes
 from src.utils.parsers import parse_7z_progress
 
 
+def _mask_cmd(cmd: list) -> list:
+    return [
+        "-p***" if (arg.startswith("-p") and len(arg) > 2) or arg == "-p" else arg
+        for arg in cmd
+    ]
+
+
 class CompressionService:
     def __init__(self, archiver: ArchiveService):
         self._archiver = archiver
         self.cancelled = False
         self._procs: List[subprocess.Popen] = []
+        self._lock = threading.Lock()
 
     def cancel(self):
-        self.cancelled = True
-        for proc in self._procs:
-            try:
-                proc.terminate()
-            except Exception:
-                pass
+        with self._lock:
+            self.cancelled = True
+            for proc in self._procs:
+                try:
+                    proc.terminate()
+                except Exception:
+                    pass
 
     def run(
         self,
@@ -83,6 +93,7 @@ class CompressionService:
                 try:
                     sz = Path(ap).stat().st_size
                     total_compressed += sz
+                    bus.emit_log(f"  计算 SHA256... [{Path(ap).name}]")
                     h = sha256sum(ap)
                     bus.emit_log(f"  SHA256 [{Path(ap).name}]：{h}")
                 except OSError:
@@ -210,7 +221,7 @@ class CompressionService:
         progress_scale: int = 100,
         cwd: str | None = None,
     ) -> bool:
-        bus.emit_log(f"  > {' '.join(cmd)}")
+        bus.emit_log(f"  > {' '.join(_mask_cmd(cmd))}")
 
         def on_line(line: str):
             if self.cancelled:
@@ -221,7 +232,7 @@ class CompressionService:
                 bus.emit_progress(f"正在压缩... {pct}%", scaled)
             bus.emit_log(f"  {line}")
 
-        returncode = self._archiver.run_7z(cmd, on_line, proc_holder=self._procs, cwd=cwd)
+        returncode = self._archiver.run_7z(cmd, preset.password, on_line, proc_holder=self._procs, cwd=cwd)
 
         if returncode != 0:
             bus.emit_log(f"  7-Zip 退出代码：{returncode}")
@@ -232,10 +243,13 @@ class CompressionService:
                 bus.emit_log("    - 尝试将输出目录设为与源文件不同的位置")
             return False
 
-        if not self.cancelled and preset.delete_after:
-            for src in sources:
-                delete_path(src, bus.emit_log)
-        return not self.cancelled
+        with self._lock:
+            if self.cancelled:
+                return False
+            if preset.delete_after:
+                for src in sources:
+                    delete_path(src, bus.emit_log)
+            return True
 
     def _verify(
         self,
@@ -248,8 +262,6 @@ class CompressionService:
     ):
         bus.emit_log(f"  验证压缩包完整性: {archive_path}")
         cmd = [sevenz_path, "t", os.path.normpath(archive_path), "-y"]
-        if preset.password:
-            cmd.append("-p" + preset.password)
 
         bus.emit_progress("正在验证...", PROGRESS_INDETERMINATE)
         found_pct = False
@@ -265,8 +277,8 @@ class CompressionService:
                 bus.emit_progress(f"正在验证... {pct}%", scaled)
             bus.emit_log(f"  {line}")
 
-        bus.emit_log(f"  > {' '.join(cmd)}")
-        returncode = self._archiver.run_7z(cmd, on_line, proc_holder=self._procs)
+        bus.emit_log(f"  > {' '.join(_mask_cmd(cmd))}")
+        returncode = self._archiver.run_7z(cmd, preset.password, on_line, proc_holder=self._procs)
         if returncode == 0:
             bus.emit_log("  ✓ 完整性验证通过")
         else:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tkinter as tk
+from tkinter import messagebox
 
 from src.core.settings_service import SettingsService
 from src.core.archive_service import ArchiveService
@@ -11,9 +12,13 @@ from src.ui.theme import apply_theme
 
 def run_app():
     root = tk.Tk()
+    root.withdraw()
     settings = SettingsService()
     archiver = ArchiveService()
     compression = CompressionService(archiver)
+    if settings._load_error:
+        messagebox.showwarning("数据加载警告", settings._load_error.strip(), parent=root)
+    root.deiconify()
     apply_theme(root, settings.current_theme)
     dnd_available = False
     try:

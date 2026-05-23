@@ -7,6 +7,7 @@ ENV/
 # Python 字节码和缓存
 __pycache__/
 *.py[cod]
+.pytest_cache/
 *.egg-info/
 
 # 分发 / 构建

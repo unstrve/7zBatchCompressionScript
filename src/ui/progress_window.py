@@ -4,22 +4,8 @@ import tkinter as tk
 from tkinter import ttk, filedialog
 
 from src.core.progress_events import PROGRESS_ERROR, PROGRESS_INDETERMINATE
+from src.ui import center_on_parent
 from src.utils.formats import format_bytes, format_duration
-
-
-def _center_on_parent(window: tk.Toplevel, parent: tk.Misc):
-    window.withdraw()
-    window.update_idletasks()
-    pw = parent.winfo_width()
-    ph = parent.winfo_height()
-    px = parent.winfo_x()
-    py = parent.winfo_y()
-    ww = window.winfo_width()
-    wh = window.winfo_height()
-    x = px + max(0, (pw - ww) // 2)
-    y = py + max(0, (ph - wh) // 2)
-    window.geometry(f"+{x}+{y}")
-    window.deiconify()
 
 
 class ProgressWindow(tk.Toplevel):
@@ -33,7 +19,7 @@ class ProgressWindow(tk.Toplevel):
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self._running = False
         self._build()
-        _center_on_parent(self, parent)
+        center_on_parent(self, parent)
 
     def _build(self):
         status_frame = ttk.Frame(self)

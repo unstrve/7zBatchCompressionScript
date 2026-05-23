@@ -27,6 +27,7 @@ class MainWindow:
         self._pw: Optional[ProgressWindow] = None
         self._build_ui()
         self._refresh_presets()
+        self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
 
     def _build_ui(self):
         notebook = ttk.Notebook(self.root)
@@ -227,6 +228,8 @@ class MainWindow:
 
     def _on_closing(self):
         if self._task:
+            if not messagebox.askyesno("确认退出", "压缩任务正在进行中，确定要退出吗？", parent=self.root):
+                return
             self._compression.cancel()
         self.settings.window_geometry = self.root.geometry()
         self.root.destroy()
